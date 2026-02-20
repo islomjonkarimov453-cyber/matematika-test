@@ -1,26 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { ref, onValue, push } from "firebase/database";
+import { ref, onValue, push, remove } from "firebase/database";
 
 function App() {
-  // --- UMUMIY STATE-LAR ---
+  // --- 1. UMUMIY STATE-LAR ---
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true); // TUNGI REJIM
   const [adminPassword, setAdminPassword] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [studentName, setStudentName] = useState('');
   const [selectedClass, setSelectedClass] = useState('7A');
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [questionsFromDB, setQuestionsFromDB] = useState({});
-  const [loading, setLoading] = useState(true); // Yuklanish holati
+  const [loading, setLoading] = useState(true);
 
-  // --- O'QUVCHI TEST STATE-LARI ---
+  // --- 2. O'QUVCHI TEST VA TIMER STATE-LARI ---
   const [examQuestions, setExamQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [studentInput, setStudentInput] = useState('');
   const [correctCount, setCorrectCount] = useState(0);
   const [status, setStatus] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(60); // 60 SONIYA TIMER
 
-  // --- O'QITUVCHI PANEL STATE-LARI ---
+  // --- 3. O'QITUVCHI PANEL STATE-LARI ---
   const [newQuestionText, setNewQuestionText] = useState('');
   const [newQuestionAnswer, setNewQuestionAnswer] = useState('');
   const [targetClass, setTargetClass] = useState('7A');
@@ -32,10 +34,8 @@ function App() {
     const rRef = ref(db, 'results');
 
     const unsubQ = onValue(qRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setQuestionsFromDB(snapshot.val());
-      }
-      setLoading(false); // Ma'lumot kelgach loadingni o'chirish
+      if (snapshot.exists()) setQuestionsFromDB(snapshot.val());
+      setLoading(false);
     });
 
     const unsubR = onValue(rRef, (snapshot) => {
@@ -48,7 +48,17 @@ function App() {
     return () => { unsubQ(); unsubR(); };
   }, []);
 
-  // --- ADMIN PAROL TEKSHIRISH ---
+  // --- 4. TIMER LOGIKASI ---
+  useEffect(() => {
+    let timer;
+    if (isExamStarted && !status && timeLeft > 0) {
+      timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+    } else if (timeLeft === 0 && isExamStarted && !status) {
+      handleFinish(); // Vaqt tugasa avtomatik tugatish
+    }
+    return () => clearInterval(timer);
+  }, [isExamStarted, timeLeft, status]);
+
   const checkPassword = () => {
     if (adminPassword === "matematika") {
       setIsAuthorized(true);
@@ -58,37 +68,52 @@ function App() {
     }
   };
 
-  // --- SAVOL QO'SHISH ---
   const addQuestion = () => {
-    if (!newQuestionText.trim() || !newQuestionAnswer.trim()) return alert("Maydonlarni to'ldiring!");
+    if (!newQuestionText.trim() || !newQuestionAnswer.trim()) return alert("To'ldiring!");
     push(ref(db, `questions/${targetClass}`), {
       text: newQuestionText,
       answer: newQuestionAnswer.trim(),
       id: Date.now()
     }).then(() => {
-      alert("Savol muvaffaqiyatli qo'shildi!");
+      alert("Savol qo'shildi!");
       setNewQuestionText('');
       setNewQuestionAnswer('');
-    }).catch((error) => alert("Xato: " + error.message));
+    });
   };
 
-  // --- TESTNI BOSHLASH ---
+  // --- 5. SAVOLNI O'CHIRISH (ADMIN) ---
+  const deleteQuestion = (cls, id) => {
+    if (window.confirm("Ushbu savolni o'chirishni xohlaysizmi?")) {
+      remove(ref(db, `questions/${cls}/${id}`));
+    }
+  };
+
   const startExam = () => {
     const questions = Object.values(questionsFromDB[selectedClass] || {});
     if (!studentName.trim()) return alert("Ismingizni kiriting!");
-    if (questions.length === 0) return alert("Bu sinf uchun savollar hali qo'shilmagan!");
+    if (questions.length === 0) return alert("Savollar yo'q!");
 
     setExamQuestions([...questions].sort(() => 0.5 - Math.random()));
     setIsExamStarted(true);
     setCurrentIndex(0);
     setCorrectCount(0);
     setStatus(null);
+    setTimeLeft(60);
   };
 
-  // --- KEYINGI SAVOL / TUGATISH ---
+  const handleFinish = () => {
+    const percent = Math.round((correctCount / examQuestions.length) * 100) + '%';
+    push(ref(db, 'results'), {
+      name: studentName,
+      score: percent,
+      class: selectedClass,
+      date: new Date().toLocaleString()
+    });
+    setStatus(percent);
+  };
+
   const handleNext = () => {
     if (!studentInput.trim()) return alert("Javobni yozing!");
-
     const isCorrect = studentInput.trim().toLowerCase() === examQuestions[currentIndex].answer.toLowerCase();
     const newCorrect = isCorrect ? correctCount + 1 : correctCount;
     setCorrectCount(newCorrect);
@@ -97,160 +122,128 @@ function App() {
       setCurrentIndex(currentIndex + 1);
       setStudentInput('');
     } else {
-      const percent = Math.round((newCorrect / examQuestions.length) * 100) + '%';
-      push(ref(db, 'results'), {
-        name: studentName,
-        score: percent,
-        class: selectedClass,
-        date: new Date().toLocaleString()
-      });
-      setStatus(percent);
+      handleFinish();
     }
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
+    <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500"></div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-4 font-sans selection:bg-blue-500/30">
-      {/* REJIM ALMASHTIRGICH */}
+    <div className={`min-h-screen p-4 font-sans transition-colors duration-500 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'}`}>
+
+      {/* 🌓 REJIM VA ADMIN TUGMALARI */}
+      <div className="fixed top-4 left-4 flex gap-2 z-50">
+        <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:scale-110 transition-all text-xl">
+          {isDarkMode ? '☀️' : '🌙'}
+        </button>
+      </div>
+
       <button
         onClick={() => { setIsAdmin(!isAdmin); setIsAuthorized(false); }}
-        className="fixed top-4 right-4 bg-white/10 backdrop-blur-md px-6 py-2 rounded-full text-xs font-bold border border-white/20 hover:bg-white/20 z-50 transition-all active:scale-95"
+        className="fixed top-4 right-4 bg-blue-600 text-white px-6 py-2 rounded-full text-xs font-bold shadow-lg hover:bg-blue-500 z-50 transition-all active:scale-95"
       >
-        {isAdmin ? "O'QUVCHI REJIMI" : "O'QITUVCHI REJIMI"}
+        {isAdmin ? "O'QUVCHI" : "O'QITUVCHI"}
       </button>
 
       {!isAdmin ? (
-        <div className="max-w-xl mx-auto mt-16 md:mt-24">
+        <div className="max-w-xl mx-auto mt-16">
           {!isExamStarted ? (
-            <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 shadow-2xl space-y-6">
-              <div className="text-center space-y-2">
-                <h1 className="text-3xl font-black bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent uppercase tracking-wider">Matematika Test</h1>
-                <p className="text-slate-500 text-sm">Bilimingizni sinab ko'ring</p>
-              </div>
-              <input className="w-full p-4 bg-white/5 rounded-2xl border border-white/10 focus:border-blue-500 outline-none transition-all text-lg" placeholder="Ismingiz..." value={studentName} onChange={e => setStudentName(e.target.value)} />
-              <select className="w-full p-4 bg-slate-900 rounded-2xl border border-white/10 outline-none cursor-pointer" value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
-                <option value="6A">6A-sinf</option>
-                <option value="7A">7A-sinf</option>
-                <option value="7B">7B-sinf</option>
-                <option value="8A">8A-sinf</option>
-                <option value="8B">8B-sinf</option>
-                <option value="9A">9A-sinf</option>
-                <option value="9B">9B-sinf</option>
-                <option value="10A">10A-sinf</option>
-                <option value="10B">10B-sinf</option>
-                <option value="11A">11A-sinf</option>
-                <option value="11B">11B-sinf</option>
-
+            <div className={`p-8 rounded-[2.5rem] border shadow-2xl space-y-6 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
+              <h1 className="text-3xl font-black text-center bg-gradient-to-r from-blue-500 to-emerald-500 bg-clip-text text-transparent uppercase">Matematika Test</h1>
+              <input className={`w-full p-4 rounded-2xl border outline-none ${isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} placeholder="Ismingiz..." value={studentName} onChange={e => setStudentName(e.target.value)} />
+              <select className={`w-full p-4 rounded-2xl border outline-none ${isDarkMode ? 'bg-slate-900 border-white/10 text-white' : 'bg-white border-slate-300 text-slate-900'}`} value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
+                {['6A', '7A', '7B', '8A', '8B', '9A', '9B', '10A', '10B', '11A', '11B'].map(c => <option key={c} value={c}>{c}-sinf</option>)}
               </select>
-              <button onClick={startExam} className="w-full py-5 bg-blue-600 hover:bg-blue-500 rounded-2xl font-black text-xl shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98]">TESTNI BOSHLASH</button>
+              <button onClick={startExam} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-xl hover:bg-blue-500 transition-all">BOSHLASH</button>
             </div>
           ) : (
-            <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 shadow-2xl text-center">
+            <div className={`p-8 rounded-[2.5rem] border shadow-2xl text-center ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
               {!status ? (
                 <div className="space-y-8">
-                  <div className="flex justify-between items-center text-slate-500 text-xs font-bold uppercase tracking-widest">
-                    <span>Sinf: {selectedClass}</span>
-                    <span>Savol: {currentIndex + 1} / {examQuestions.length}</span>
+                  <div className="flex justify-between items-center text-xs font-bold uppercase">
+                    <span className={`px-4 py-2 rounded-full ${timeLeft < 10 ? 'bg-red-500 text-white animate-pulse' : 'bg-blue-500/10 text-blue-500'}`}>⏱ {timeLeft}s</span>
+                    <span className="text-slate-500">Savol: {currentIndex + 1}/{examQuestions.length}</span>
                   </div>
-                  <h2 className="text-3xl md:text-4xl font-bold leading-tight italic text-blue-50">"{examQuestions[currentIndex]?.text}"</h2>
-                  <input className="w-full p-6 bg-black/40 border-2 border-blue-900/50 rounded-3xl text-center text-3xl font-mono text-blue-400 focus:border-blue-500 outline-none transition-all shadow-inner" placeholder="?" value={studentInput} onChange={e => setStudentInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleNext()} autoFocus />
-                  <button onClick={handleNext} className="w-full py-5 bg-blue-600 hover:bg-blue-500 rounded-2xl font-black text-lg transition-all active:scale-[0.98]">KEYINGI SAVOL</button>
+                  <h2 className="text-3xl font-bold italic">"{examQuestions[currentIndex]?.text}"</h2>
+                  <input className={`w-full p-6 border-2 rounded-3xl text-center text-3xl outline-none transition-all ${isDarkMode ? 'bg-black/40 border-blue-900/50 text-blue-400' : 'bg-slate-50 border-blue-200 text-blue-600'}`} placeholder="?" value={studentInput} onChange={e => setStudentInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleNext()} autoFocus />
+                  <button onClick={handleNext} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-lg">KEYINGI</button>
                 </div>
               ) : (
-                <div className="py-12 space-y-6">
-                  <div className="inline-flex p-4 bg-green-500/10 rounded-full">
-                    <svg className="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  </div>
-                  <h3 className="text-7xl font-black text-green-500 tabular-nums">{status}</h3>
-                  <p className="text-slate-400 text-lg font-medium">Ofarin, {studentName}! <br /> Natijangiz bazaga saqlandi.</p>
-                  <button onClick={() => window.location.reload()} className="px-10 py-4 bg-white/10 hover:bg-white/20 rounded-full text-sm font-bold border border-white/10 transition-all">ASOSIY SAHIFAGA QAYTISH</button>
+                <div className="py-12 space-y-6 text-center">
+                  <h3 className="text-7xl font-black text-green-500">{status}</h3>
+                  <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Ofarin, {studentName}!</p>
+                  <button onClick={() => window.location.reload()} className="px-10 py-4 bg-blue-600 text-white rounded-full font-bold">YANA BIR BOR</button>
                 </div>
               )}
             </div>
           )}
         </div>
       ) : (
-        <div className="max-w-5xl mx-auto mt-16 md:mt-20">
+        <div className="max-w-6xl mx-auto mt-16 space-y-8">
           {!isAuthorized ? (
-            <div className="max-w-md mx-auto bg-white/5 p-10 rounded-[2.5rem] border border-white/10 shadow-2xl text-center space-y-6">
-              <div className="p-4 bg-emerald-500/10 inline-block rounded-3xl">
-                <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-              </div>
-              <h2 className="text-2xl font-bold">O'qituvchi Nazorati</h2>
-              <input type="password" className="w-full p-4 bg-black/50 border border-white/10 rounded-2xl mb-4 text-center text-2xl tracking-[0.5em] focus:border-emerald-500 outline-none transition-all" placeholder="••••" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && checkPassword()} />
-              <button onClick={checkPassword} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-bold shadow-lg shadow-emerald-600/20 transition-all">KIRISH</button>
+            <div className={`max-w-md mx-auto p-10 rounded-[2.5rem] border shadow-2xl text-center space-y-6 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
+              <h2 className="text-2xl font-bold">Admin Kirish</h2>
+              <input type="password" className={`w-full p-4 rounded-2xl border text-center text-2xl outline-none ${isDarkMode ? 'bg-black/50 border-white/10 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} placeholder="••••" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && checkPassword()} />
+              <button onClick={checkPassword} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold">KIRISH</button>
             </div>
           ) : (
-            <div className="space-y-8 animate-in fade-in duration-500">
-              <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
-                <h1 className="text-4xl font-black text-emerald-500 uppercase tracking-tighter">Admin Panel</h1>
-                <div className="flex gap-4 items-center">
-                  <div className="px-4 py-2 bg-emerald-500/10 rounded-xl text-emerald-500 text-sm font-bold border border-emerald-500/20">Onlayn: {results.length} ta natija</div>
+            <div className="grid lg:grid-cols-5 gap-8">
+              {/* 6. SAVOL QO'SHISH */}
+              <div className={`lg:col-span-2 p-8 rounded-[2rem] border h-fit sticky top-24 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
+                <h2 className="font-black text-slate-400 uppercase text-xs mb-6">Yangi Savol</h2>
+                <div className="space-y-4">
+                  <select className={`w-full p-3 rounded-xl border outline-none ${isDarkMode ? 'bg-slate-900 border-white/10 text-white' : 'bg-slate-50 border-slate-300'}`} value={targetClass} onChange={e => setTargetClass(e.target.value)}>
+                    {['6A', '7A', '7B', '8A', '8B', '9A', '9B', '10A', '10B', '11A', '11B'].map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <textarea className={`w-full p-4 rounded-2xl border outline-none h-32 resize-none ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} placeholder="Savol matni..." value={newQuestionText} onChange={e => setNewQuestionText(e.target.value)} />
+                  <input className={`w-full p-4 rounded-2xl border outline-none font-bold ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'}`} placeholder="Javob" value={newQuestionAnswer} onChange={e => setNewQuestionAnswer(e.target.value)} />
+                  <button onClick={addQuestion} className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black">QO'SHISH</button>
                 </div>
-              </header>
+              </div>
 
-              <div className="grid lg:grid-cols-5 gap-8">
-                {/* SAVOL QO'SHISH */}
-                <div className="lg:col-span-2 bg-white/5 p-8 rounded-[2rem] border border-white/10 space-y-6 h-fit sticky top-24">
-                  <h2 className="font-black text-slate-400 uppercase text-xs tracking-widest flex items-center gap-2">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                    Yangi Savol Qo'shish
-                  </h2>
+              {/* 7. SAVOLLARNI O'CHIRISH VA NATIJALAR */}
+              <div className={`lg:col-span-3 rounded-[2rem] border overflow-hidden flex flex-col h-[700px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
+                <div className="p-6 border-b border-white/10 flex justify-between bg-white/5">
+                  <h2 className="font-black text-slate-400 uppercase text-xs tracking-tighter">Boshqaruv Paneli</h2>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-10 scrollbar-hide">
+
+                  {/* SAVOLLAR RO'YXATI */}
                   <div className="space-y-4">
-                    <label className="block text-sm text-slate-500 font-bold">Sinfni tanlang:</label>
-                    <div className="flex gap-2">
-                      {['7A', '8A'].map(cls => (
-                        <button key={cls} onClick={() => setTargetClass(cls)} className={`flex-1 py-3 rounded-xl font-bold border transition-all ${targetClass === cls ? 'bg-emerald-600 border-emerald-500' : 'bg-white/5 border-white/10 text-slate-400'}`}>{cls}</button>
+                    <h3 className="text-xs font-bold text-blue-500 uppercase px-2">Savollar (O'chirish uchun x bosing)</h3>
+                    {Object.entries(questionsFromDB).map(([cls, qs]) => (
+                      <div key={cls} className="space-y-2">
+                        <div className="text-[10px] font-black text-slate-500 bg-slate-500/5 p-1 px-3 rounded-full w-fit">{cls}-sinf</div>
+                        {Object.entries(qs).map(([id, q]) => (
+                          <div key={id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 group hover:border-red-500/30 transition-all">
+                            <span className="text-sm italic opacity-80">"{q.text}"</span>
+                            <button onClick={() => deleteQuestion(cls, id)} className="text-red-500 hover:bg-red-500/20 px-3 py-1 rounded-lg font-bold transition-all">✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* NATIJALAR JADVALI */}
+                  <div className="pt-6 border-t border-white/10">
+                    <h3 className="text-xs font-bold text-emerald-500 uppercase px-2 mb-4">O'quvchilar Natijalari</h3>
+                    <div className="space-y-2">
+                      {results.map((r, i) => (
+                        <div key={i} className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
+                          <div>
+                            <div className="font-bold text-sm">{r.name}</div>
+                            <div className="text-[10px] opacity-40">{r.date} | {r.class}</div>
+                          </div>
+                          <div className="font-black text-emerald-500 text-xl">{r.score}</div>
+                        </div>
                       ))}
                     </div>
-                    <textarea className="w-full p-4 bg-black/30 rounded-2xl border border-white/10 focus:border-emerald-500 outline-none h-32 resize-none transition-all" placeholder="Savol matni (masalan: 15 + 25 = ?)" value={newQuestionText} onChange={e => setNewQuestionText(e.target.value)} />
-                    <input className="w-full p-4 bg-black/30 rounded-2xl border border-white/10 focus:border-emerald-500 outline-none font-bold" placeholder="To'g'ri javob" value={newQuestionAnswer} onChange={e => setNewQuestionAnswer(e.target.value)} />
-                    <button onClick={addQuestion} className="w-full py-5 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-black text-lg transition-all shadow-lg shadow-emerald-600/10">BAZAGA QO'SHISH</button>
                   </div>
-                </div>
 
-                {/* NATIJALAR JADVALI */}
-                <div className="lg:col-span-3 bg-white/5 rounded-[2rem] border border-white/10 overflow-hidden flex flex-col h-[600px]">
-                  <div className="p-6 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                    <h2 className="font-black text-slate-400 uppercase text-xs tracking-widest">O'quvchilar Natijalari</h2>
-                  </div>
-                  <div className="flex-1 overflow-y-auto scrollbar-hide">
-                    {results.length > 0 ? (
-                      <table className="w-full text-left">
-                        <thead className="sticky top-0 bg-slate-900 text-slate-500 text-[10px] uppercase font-black tracking-widest">
-                          <tr>
-                            <th className="p-6">O'quvchi</th>
-                            <th className="p-6 text-center">Sinf</th>
-                            <th className="p-6 text-right">Ball</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {results.map((r, i) => (
-                            <tr key={i} className="group hover:bg-white/5 transition-colors">
-                              <td className="p-6">
-                                <div className="font-bold text-blue-100 group-hover:text-blue-400 transition-colors">{r.name}</div>
-                                <div className="text-[10px] text-slate-600 mt-1 font-mono">{r.date}</div>
-                              </td>
-                              <td className="p-6 text-center">
-                                <span className="px-3 py-1 bg-white/5 rounded-lg text-xs font-bold text-slate-400">{r.class}</span>
-                              </td>
-                              <td className="p-6 text-right font-black text-xl text-emerald-400 tabular-nums">{r.score}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-4">
-                        <svg className="w-16 h-16 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        <p className="font-medium italic">Hozircha natijalar yo'q...</p>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
