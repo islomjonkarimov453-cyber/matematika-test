@@ -50,7 +50,7 @@ function App() {
 
   // --- ADMIN PAROL TEKSHIRISH ---
   const checkPassword = () => {
-    if (adminPassword === "islomjon11") {
+    if (adminPassword === "matematika") {
       setIsAuthorized(true);
       setAdminPassword('');
     } else {
@@ -134,8 +134,18 @@ function App() {
               </div>
               <input className="w-full p-4 bg-white/5 rounded-2xl border border-white/10 focus:border-blue-500 outline-none transition-all text-lg" placeholder="Ismingiz..." value={studentName} onChange={e => setStudentName(e.target.value)} />
               <select className="w-full p-4 bg-slate-900 rounded-2xl border border-white/10 outline-none cursor-pointer" value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
+                <option value="6A">6A-sinf</option>
                 <option value="7A">7A-sinf</option>
+                <option value="7B">7B-sinf</option>
                 <option value="8A">8A-sinf</option>
+                <option value="8B">8B-sinf</option>
+                <option value="9A">9A-sinf</option>
+                <option value="9B">9B-sinf</option>
+                <option value="10A">10A-sinf</option>
+                <option value="10B">10B-sinf</option>
+                <option value="11A">11A-sinf</option>
+                <option value="11B">11B-sinf</option>
+
               </select>
               <button onClick={startExam} className="w-full py-5 bg-blue-600 hover:bg-blue-500 rounded-2xl font-black text-xl shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98]">TESTNI BOSHLASH</button>
             </div>
