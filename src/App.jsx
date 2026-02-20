@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { db } from './firebase';
+import { db } from './firebase'; // Firebase ulanishi
+import { ref, onValue, push } from "firebase/database"; // Firebase funksiyalari
 
 function App() {
   // --- UMUMIY STATE-LAR ---
-  useState(true);
-  const [adminPassword, setAdminPassword] = useState(''); // Parol uchun state
-  const [isAuthorized, setIsAuthorized] = useState(false); // Kirish ruxsati
+  const [isAdmin, setIsAdmin] = useState(false); // Rejimni almashtirish (O'quvchi/O'qituvchi)
+  const [adminPassword, setAdminPassword] = useState(''); // Parol uchun
+  const [isAuthorized, setIsAuthorized] = useState(false); // Admin kirganmi?
   const [studentName, setStudentName] = useState('');
   const [selectedClass, setSelectedClass] = useState('7A');
   const [isExamStarted, setIsExamStarted] = useState(false);
@@ -26,17 +27,26 @@ function App() {
 
   // --- BAZADAN MA'LUMOTLARNI OLISH ---
   useEffect(() => {
-    onValue(ref(db, 'questions'), (snapshot) => {
-      if (snapshot.exists()) setQuestionsFromDB(snapshot.val());
+    // Savollarni olish
+    const qRef = ref(db, 'questions');
+    onValue(qRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setQuestionsFromDB(snapshot.val());
+      }
     });
-    onValue(ref(db, 'results'), (snapshot) => {
-      if (snapshot.exists()) setResults(Object.values(snapshot.val()));
+
+    // Natijalarni olish
+    const rRef = ref(db, 'results');
+    onValue(rRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setResults(Object.values(snapshot.val()));
+      }
     });
   }, []);
 
   // --- PAROLNI TEKSHIRISH ---
   const checkPassword = () => {
-    if (adminPassword === "islomjon11") { // SHU YERGA O'Z PAROLINGIZNI YOZING
+    if (adminPassword === "islomjon11") {
       setIsAuthorized(true);
       setAdminPassword('');
     } else {
@@ -53,14 +63,17 @@ function App() {
       id: Date.now()
     }).then(() => {
       alert("Savol qo'shildi!");
-      setNewQuestionText(''); setNewQuestionAnswer('');
+      setNewQuestionText('');
+      setNewQuestionAnswer('');
     });
   };
 
   // --- O'QUVCHI FUNKSIYALARI ---
   const startExam = () => {
     const questions = Object.values(questionsFromDB[selectedClass] || {});
-    if (!studentName || questions.length === 0) return alert("Ism yo'q yoki savollar bo'sh!");
+    if (!studentName.trim() || questions.length === 0) {
+      return alert("Ismingizni yozing yoki bu sinfda savollar hali yo'q!");
+    }
     setExamQuestions([...questions].sort(() => 0.5 - Math.random()));
     setIsExamStarted(true);
   };
@@ -75,18 +88,23 @@ function App() {
       setStudentInput('');
     } else {
       const percent = Math.round((newCorrect / examQuestions.length) * 100) + '%';
-      push(ref(db, 'results'), { name: studentName, score: percent, class: selectedClass, date: new Date().toLocaleString() });
+      push(ref(db, 'results'), {
+        name: studentName,
+        score: percent,
+        class: selectedClass,
+        date: new Date().toLocaleString()
+      });
       setStatus(percent);
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6 font-sans">
-      {/* REJIMNI ALMASHTIRISH */}
+      {/* REJIMNI ALMASHTIRISH TUGMASI */}
       <button
         onClick={() => {
           setIsAdmin(!isAdmin);
-          setIsAuthorized(false); // Rejim almashganda har safar parolni qayta so'raydi
+          setIsAuthorized(false);
         }}
         className="fixed top-4 right-4 bg-white/10 px-4 py-2 rounded-full text-xs font-bold border border-white/20 hover:bg-white/20 z-50"
       >
@@ -94,7 +112,7 @@ function App() {
       </button>
 
       {!isAdmin ? (
-        /* O'QUVCHI REJIMI */
+        /* --- O'QUVCHI REJIMI --- */
         <div className="max-w-xl mx-auto mt-20">
           {!isExamStarted ? (
             <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 space-y-4">
@@ -112,7 +130,7 @@ function App() {
                 <div className="space-y-6">
                   <p className="text-slate-500 uppercase text-xs">Savol: {currentIndex + 1} / {examQuestions.length}</p>
                   <h2 className="text-3xl font-bold italic">"{examQuestions[currentIndex]?.text}"</h2>
-                  <input className="w-full p-5 bg-black border-2 border-blue-900 rounded-2xl text-center text-2xl" placeholder="Javob?" value={studentInput} onChange={e => setStudentInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleNext()} />
+                  <input className="w-full p-5 bg-black border-2 border-blue-900 rounded-2xl text-center text-2xl" placeholder="Javob?" value={studentInput} onChange={e => setStudentInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleNext()} autoFocus />
                   <button onClick={handleNext} className="w-full py-4 bg-blue-600 rounded-xl font-black">KEYINGI SAVOL</button>
                 </div>
               ) : (
@@ -126,10 +144,9 @@ function App() {
           )}
         </div>
       ) : (
-        /* O'QITUVCHI REJIMI */
+        /* --- O'QITUVCHI REJIMI --- */
         <div className="max-w-4xl mx-auto mt-10">
           {!isAuthorized ? (
-            /* PAROL KIRITISH OYNASI */
             <div className="max-w-sm mx-auto mt-20 bg-white/5 p-8 rounded-[2rem] border border-white/10 text-center">
               <h2 className="text-xl font-bold mb-6">Admin Kirish</h2>
               <input
@@ -143,10 +160,10 @@ function App() {
               <button onClick={checkPassword} className="w-full py-4 bg-blue-600 rounded-xl font-bold">KIRISH</button>
             </div>
           ) : (
-            /* ASOSIY ADMIN PANEL */
             <div className="space-y-10">
               <h1 className="text-3xl font-black text-emerald-500 uppercase">Admin Panel</h1>
               <div className="grid md:grid-cols-2 gap-6">
+                {/* SAVOL QO'SHISH */}
                 <div className="bg-white/5 p-6 rounded-3xl border border-white/10 space-y-4">
                   <h2 className="font-bold text-slate-400 uppercase text-sm">Yangi savol</h2>
                   <select className="w-full p-3 bg-slate-900 rounded-xl" value={targetClass} onChange={e => setTargetClass(e.target.value)}>
@@ -158,13 +175,18 @@ function App() {
                   <button onClick={addQuestion} className="w-full py-3 bg-emerald-600 rounded-xl font-bold">QO'SHISH</button>
                 </div>
 
+                {/* NATIJALAR JADVALI */}
                 <div className="bg-white/5 p-6 rounded-3xl border border-white/10 h-[400px] overflow-y-auto">
                   <h2 className="font-bold text-slate-400 uppercase text-sm mb-4">Natijalar</h2>
                   <table className="w-full text-left text-sm">
                     <thead><tr className="border-b border-white/10 text-slate-500"><th>Ism</th><th>Sinf</th><th>Ball</th></tr></thead>
                     <tbody>
                       {results.map((r, i) => (
-                        <tr key={i} className="border-b border-white/5 hover:bg-white/5"><td className="py-2">{r.name}</td><td>{r.class}</td><td className="text-emerald-400">{r.score}</td></tr>
+                        <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                          <td className="py-2">{r.name}</td>
+                          <td>{r.class}</td>
+                          <td className="text-emerald-400 font-bold">{r.score}</td>
+                        </tr>
                       ))}
                     </tbody>
                   </table>
