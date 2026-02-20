@@ -4,7 +4,7 @@ import { ref, push, onValue } from 'firebase/database';
 
 function App() {
   // --- UMUMIY STATE-LAR ---
-  const [isAdmin, setIsAdmin] = useState(false);
+  useState(true);
   const [adminPassword, setAdminPassword] = useState(''); // Parol uchun state
   const [isAuthorized, setIsAuthorized] = useState(false); // Kirish ruxsati
   const [studentName, setStudentName] = useState('');
@@ -37,7 +37,7 @@ function App() {
 
   // --- PAROLNI TEKSHIRISH ---
   const checkPassword = () => {
-    if (adminPassword === "admin123") { // SHU YERGA O'Z PAROLINGIZNI YOZING
+    if (adminPassword === "islomjon11") { // SHU YERGA O'Z PAROLINGIZNI YOZING
       setIsAuthorized(true);
       setAdminPassword('');
     } else {
