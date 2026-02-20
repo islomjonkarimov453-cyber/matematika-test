@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { ref, push, onValue } from 'firebase/database';
 
 function App() {
   // --- UMUMIY STATE-LAR ---
