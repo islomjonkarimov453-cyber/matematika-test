@@ -4,7 +4,11 @@ import { ref, onValue, push, remove, set } from "firebase/database";
 import * as XLSX from 'xlsx';
 
 function App() {
-  const [isAdmin, setIsAdmin] = useState(false);
+  // MAXFIY LINK TEKSHIRUVI: sayt.uz/?panel=math123 bo'lsa admin panel ochiladi
+  const urlParams = new URLSearchParams(window.location.search);
+  const isUrlAdmin = urlParams.get('panel') === 'math123';
+
+  const [isAdmin, setIsAdmin] = useState(isUrlAdmin);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [adminPassword, setAdminPassword] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -41,6 +45,8 @@ function App() {
       if (snapshot.exists()) {
         const data = Object.values(snapshot.val()).reverse();
         setResults(data);
+      } else {
+        setResults([]);
       }
     });
 
@@ -73,14 +79,22 @@ function App() {
     XLSX.writeFile(workbook, "Matematika_Test_Natijalari.xlsx");
   };
 
+  const clearAllResults = () => {
+    if (window.confirm("DIQQAT! Barcha natijalarni o'chirib tashlamoqchimisiz?")) {
+      remove(ref(db, 'results'))
+        .then(() => alert("Tozalandi!"))
+        .catch(err => alert("Xato: " + err.message));
+    }
+  };
+
   const saveTimerSetting = () => {
     set(ref(db, 'settings/timer'), parseInt(adminTimeSetting))
-      .then(() => alert("Vaqt saqlandi!"))
+      .then(() => alert("Saqlandi!"))
       .catch(err => alert("Xato: " + err.message));
   };
 
   const deleteQuestion = (cls, id) => {
-    if (window.confirm("O'chirishni xohlaysizmi?")) remove(ref(db, `questions/${cls}/${id}`));
+    if (window.confirm("O'chirilsinmi?")) remove(ref(db, `questions/${cls}/${id}`));
   };
 
   const handleCheckPassword = () => {
@@ -101,7 +115,7 @@ function App() {
 
   const startExam = () => {
     const questions = Object.values(questionsFromDB[selectedClass] || {});
-    if (!studentName.trim() || questions.length === 0) return alert("Ismingizni yozing yoki savollar mavjud emas!");
+    if (!studentName.trim() || questions.length === 0) return alert("Ism yozilmagan yoki savol yo'q!");
     setExamQuestions([...questions].sort(() => 0.5 - Math.random()));
     setIsExamStarted(true);
     setCurrentIndex(0); setCorrectCount(0); setStatus(null);
@@ -117,7 +131,7 @@ function App() {
   };
 
   const handleNext = () => {
-    if (!studentInput.trim()) return alert("Javob yozing!");
+    if (!studentInput.trim()) return alert("Javobni yozing!");
     const isCorrect = studentInput.trim().toLowerCase() === examQuestions[currentIndex].answer.toLowerCase();
     if (isCorrect) setCorrectCount(prev => prev + 1);
     if (currentIndex + 1 < examQuestions.length) {
@@ -125,7 +139,7 @@ function App() {
     } else handleFinish();
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center font-bold">Yuklanmoqda...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center font-bold italic animate-pulse">Yuklanmoqda...</div>;
 
   return (
     <div className={`min-h-screen p-4 transition-colors duration-500 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'}`}>
@@ -136,12 +150,8 @@ function App() {
         </button>
       </div>
 
-      <button onClick={() => { setIsAdmin(!isAdmin); setIsAuthorized(false); }}
-        className="fixed top-4 right-4 bg-blue-600 text-white px-6 py-2 rounded-full text-xs font-bold shadow-lg z-50 active:scale-95 transition-all">
-        {isAdmin ? "O'QUVCHI" : "O'QITUVCHI"}
-      </button>
-
       {!isAdmin ? (
+        /* --- O'QUVCHI QISMI (Odatdagi ko'rinish) --- */
         <div className="max-w-xl mx-auto mt-20">
           {!isExamStarted ? (
             <div className={`p-8 rounded-[2.5rem] border shadow-2xl space-y-6 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
@@ -175,10 +185,11 @@ function App() {
           )}
         </div>
       ) : (
-        <div className="max-w-6xl mx-auto mt-20 space-y-8">
+        /* --- O'QITUVCHI PANEL (Faqat ?panel=math123 orqali) --- */
+        <div className="max-w-6xl mx-auto mt-20 space-y-8 animate-in fade-in zoom-in duration-500">
           {!isAuthorized ? (
             <div className={`max-w-md mx-auto p-10 rounded-[2.5rem] border shadow-2xl text-center space-y-6 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
-              <h2 className="text-2xl font-bold uppercase tracking-tighter">O'QITUVCHI NAZORATI</h2>
+              <h2 className="text-2xl font-black uppercase tracking-tighter italic text-blue-500">O'qituvchi Nazorati</h2>
               <input
                 type="password"
                 autoFocus
@@ -188,53 +199,50 @@ function App() {
                 onChange={e => setAdminPassword(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleCheckPassword()}
               />
-              <button
-                onClick={handleCheckPassword}
-                className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 active:scale-95 transition-all shadow-lg"
-              >
-                KIRISH
-              </button>
+              <button onClick={handleCheckPassword} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold active:scale-95 transition-all shadow-lg">KIRISH</button>
             </div>
           ) : (
             <div className="grid lg:grid-cols-5 gap-8">
               <div className="lg:col-span-2 space-y-8">
                 <div className={`p-6 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
-                  <h2 className="text-xs font-black text-blue-500 uppercase mb-4 italic">Vaqt (soniya)</h2>
+                  <h2 className="text-xs font-black text-blue-500 uppercase mb-4 italic">Vaqt Sozlamasi (soniya)</h2>
                   <div className="flex gap-2">
                     <input type="number" className={`flex-1 p-3 rounded-xl border outline-none ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-slate-50'}`} value={adminTimeSetting} onChange={e => setAdminTimeSetting(e.target.value)} />
-                    <button onClick={saveTimerSetting} className="px-6 bg-blue-600 text-white rounded-xl font-bold text-sm active:scale-95 transition-transform">OK</button>
+                    <button onClick={saveTimerSetting} className="px-6 bg-blue-600 text-white rounded-xl font-bold text-sm active:scale-95">OK</button>
                   </div>
                 </div>
 
                 <div className={`p-8 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
-                  <h2 className="text-xs font-black text-emerald-500 uppercase mb-6">Yangi Savol</h2>
+                  <h2 className="text-xs font-black text-emerald-500 uppercase mb-6">Yangi Savol Qo'shish</h2>
                   <div className="space-y-4">
-                    <select className={`w-full p-3 rounded-xl border outline-none ${isDarkMode ? 'bg-slate-900 border-white/10 text-white' : 'bg-white border-slate-300'}`} value={targetClass} onChange={e => setTargetClass(e.target.value)}>
+                    <select className={`w-full p-3 rounded-xl border outline-none ${isDarkMode ? 'bg-slate-900 border-white/10 text-white' : 'bg-white'}`} value={targetClass} onChange={e => setTargetClass(e.target.value)}>
                       {['6A', '7A', '7B', '8A', '8B', '9A', '9B', '10A', '10B', '11A', '11B'].map(c => <option key={c} value={c}>{c}-sinf</option>)}
                     </select>
-                    <textarea className={`w-full p-4 rounded-2xl border outline-none h-24 ${isDarkMode ? 'bg-black/30 border-white/10 text-white focus:border-blue-500' : 'bg-slate-50 focus:border-blue-500'}`} placeholder="Savol matni..." value={newQuestionText} onChange={e => setNewQuestionText(e.target.value)} />
-                    <input className={`w-full p-4 rounded-2xl border outline-none font-bold ${isDarkMode ? 'bg-black/30 border-white/10 text-white focus:border-blue-500' : 'bg-slate-50 focus:border-blue-500'}`} placeholder="Javob" value={newQuestionAnswer} onChange={e => setNewQuestionAnswer(e.target.value)} />
-                    <button onClick={addQuestion} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black active:scale-95 transition-transform">QO'SHISH</button>
+                    <textarea className={`w-full p-4 rounded-2xl border outline-none h-24 ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-slate-50'}`} placeholder="Savol matni..." value={newQuestionText} onChange={e => setNewQuestionText(e.target.value)} />
+                    <input className={`w-full p-4 rounded-2xl border outline-none font-bold ${isDarkMode ? 'bg-black/30 border-white/10 text-white' : 'bg-slate-50'}`} placeholder="Javob" value={newQuestionAnswer} onChange={e => setNewQuestionAnswer(e.target.value)} />
+                    <button onClick={addQuestion} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black active:scale-95">QO'SHISH</button>
                   </div>
                 </div>
               </div>
 
               <div className={`lg:col-span-3 rounded-[2rem] border overflow-hidden flex flex-col h-[700px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-xl'}`}>
                 <div className="p-6 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                  <h2 className="font-black text-slate-500 uppercase text-xs tracking-widest italic">Natijalar Jadvali</h2>
-                  <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl text-xs font-black transition-all shadow-lg active:scale-95">
-                    📥 EXCEL
-                  </button>
+                  <h2 className="font-black text-slate-500 uppercase text-xs italic tracking-widest">O'qituvchi Boshqaruv Paneli</h2>
+                  <div className="flex gap-2">
+                    <button onClick={exportToExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-emerald-700 active:scale-95 shadow-md">EXCEL</button>
+                    <button onClick={clearAllResults} className="bg-red-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-red-700 active:scale-95 shadow-md">TOZALASH</button>
+                  </div>
                 </div>
+
                 <div className="flex-1 overflow-y-auto p-4 space-y-10 scrollbar-hide">
                   <div className="space-y-4">
                     {Object.entries(questionsFromDB).map(([cls, qs]) => (
                       <div key={cls} className="space-y-2">
-                        <div className="text-[10px] font-black text-blue-500 bg-blue-500/10 p-1 px-4 rounded-full w-fit tracking-tighter">{cls} SAVOLLARI</div>
+                        <div className="text-[10px] font-black text-blue-500 bg-blue-500/10 p-1 px-4 rounded-full w-fit">{cls} SINFI</div>
                         {Object.entries(qs).map(([id, q]) => (
-                          <div key={id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:border-red-500/30 transition-all">
+                          <div key={id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/20 transition-all">
                             <span className="text-sm opacity-80 italic">"{q.text}"</span>
-                            <button onClick={() => deleteQuestion(cls, id)} className="text-red-500 font-bold px-3 hover:bg-red-500/10 rounded-lg py-1">✕</button>
+                            <button onClick={() => deleteQuestion(cls, id)} className="text-red-500 font-bold px-3 hover:bg-red-500/10 rounded-lg">✕</button>
                           </div>
                         ))}
                       </div>
@@ -242,14 +250,15 @@ function App() {
                   </div>
 
                   <div className="pt-6 border-t border-white/10">
-                    <h3 className="text-xs font-black text-emerald-500 mb-4 uppercase tracking-widest">O'quvchilar Reytingi</h3>
+                    <h3 className="text-xs font-black text-emerald-500 mb-4 uppercase tracking-widest italic">O'quvchilar Reytingi</h3>
                     <div className="space-y-2">
                       {results.map((r, i) => (
-                        <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${isDarkMode ? 'bg-white/5 border border-white/5' : 'bg-slate-50 border border-slate-200'}`}>
+                        <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${isDarkMode ? 'bg-white/5 border border-white/5' : 'bg-slate-50 border'}`}>
                           <div><div className="font-black text-sm">{r.name}</div><div className="text-[10px] opacity-40 font-bold">{r.class} | {r.date}</div></div>
                           <div className="font-black text-emerald-500 text-2xl drop-shadow-sm">{r.score}</div>
                         </div>
                       ))}
+                      {results.length === 0 && <p className="text-center opacity-30 italic py-10">Hali hech kim test topshirmadi</p>}
                     </div>
                   </div>
                 </div>
