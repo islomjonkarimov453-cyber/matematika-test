@@ -63,6 +63,71 @@ function App() {
     return () => clearInterval(timer);
   }, [isExamStarted, timeLeft, status]);
 
+  // --- ANTI-CHEAT TIZIMI ---
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (isExamStarted && !status && document.hidden) {
+        alert("DIQQAT: Sahifadan chiqqaningiz uchun testingiz yakunlandi!");
+        handleFinish();
+      }
+    };
+
+    const handleContextMenu = (e) => {
+      if (isExamStarted) e.preventDefault(); // Nusxalashni taqiqlash
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener("contextmenu", handleContextMenu);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, [isExamStarted, status]);
+
+  // --- AQLLI EXCEL YUKLASH FUNKSIYASI ---
+  const handleExcelUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+        let count = 0;
+        data.forEach((row) => {
+          if (!row || row.length < 2) return;
+
+          const rawQ = row[0] ? row[0].toString().trim() : "";
+          const rawA = row[1] ? row[1].toString().trim() : "";
+
+          // Sarlavhalarni filtr qilish
+          const skipWords = ["savol", "javob", "question", "answer", "№", "n", "t/r"];
+          if (skipWords.includes(rawQ.toLowerCase()) || skipWords.includes(rawA.toLowerCase())) return;
+
+          if (rawQ && rawA) {
+            push(ref(db, `questions/${targetClass}`), {
+              text: rawQ,
+              answer: rawA,
+              id: Date.now() + Math.random()
+            });
+            count++;
+          }
+        });
+        alert(`${count} ta savol muvaffaqiyatli yuklandi!`);
+      } catch (err) {
+        alert("Faylni o'qishda xatolik!");
+      }
+      e.target.value = null;
+    };
+    reader.readAsBinaryString(file);
+  };
+
   // Admin funksiyalari
   const exportToExcel = () => {
     if (results.length === 0) return alert("Natijalar yo'q!");
@@ -95,7 +160,7 @@ function App() {
   // Test mantiqi
   const startExam = () => {
     const questions = Object.values(questionsFromDB[selectedClass] || {});
-    if (!studentName.trim() || questions.length === 0) return alert("Xatolik!");
+    if (!studentName.trim() || questions.length === 0) return alert("Xatolik: Ism yo'q yoki bu sinf uchun savollar topilmadi!");
     setExamQuestions([...questions].sort(() => 0.5 - Math.random()));
     setIsExamStarted(true);
     setCurrentIndex(0); setCorrectCount(0); setStatus(null);
@@ -103,11 +168,14 @@ function App() {
   };
 
   const handleFinish = () => {
-    const percent = Math.round((correctCount / (examQuestions.length || 1)) * 100) + '%';
-    push(ref(db, 'results'), {
-      name: studentName, score: percent, class: selectedClass, date: new Date().toLocaleString()
+    setExamQuestions(prev => {
+      const percent = Math.round((correctCount / (prev.length || 1)) * 100) + '%';
+      push(ref(db, 'results'), {
+        name: studentName, score: percent, class: selectedClass, date: new Date().toLocaleString()
+      });
+      setStatus(percent);
+      return prev;
     });
-    setStatus(percent);
   };
 
   const handleNext = () => {
@@ -128,13 +196,12 @@ function App() {
 
         {/* Universal Dark Mode Tugmasi */}
         <div className="fixed top-4 left-4 z-50">
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg">
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg active:scale-90 transition-transform">
             {isDarkMode ? '☀️' : '🌙'}
           </button>
         </div>
 
         <Routes>
-          {/* --- O'QUVCHI YO'LI --- */}
           <Route path="/" element={
             <div className="max-w-xl mx-auto mt-20">
               {!isExamStarted ? (
@@ -144,7 +211,7 @@ function App() {
                   <select className={`w-full p-4 rounded-2xl border outline-none ${isDarkMode ? 'bg-slate-900 border-white/10 text-white' : 'bg-white'}`} value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
                     {['6A', '7A', '7B', '8A', '8B', '9A', '9B', '10A', '10B', '11A', '11B'].map(c => <option key={c} value={c}>{c}-sinf</option>)}
                   </select>
-                  <button onClick={startExam} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-xl shadow-xl active:scale-95 transition-all">BOSHLASH</button>
+                  <button onClick={startExam} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-xl shadow-xl active:scale-95 transition-all hover:bg-blue-700">BOSHLASH</button>
                 </div>
               ) : (
                 <div className={`p-8 rounded-[2.5rem] border shadow-2xl text-center ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
@@ -170,7 +237,6 @@ function App() {
             </div>
           } />
 
-          {/* --- ADMIN YO'LI --- */}
           <Route path="/admin" element={
             <div className="max-w-6xl mx-auto mt-20 space-y-8">
               {!isAuthorized ? (
@@ -189,6 +255,7 @@ function App() {
                         <button onClick={() => set(ref(db, 'settings/timer'), parseInt(adminTimeSetting))} className="px-6 bg-blue-600 text-white rounded-xl font-bold active:scale-95">OK</button>
                       </div>
                     </div>
+
                     <div className={`p-8 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
                       <h2 className="text-xs font-black text-emerald-500 uppercase mb-6">Yangi Savol</h2>
                       <div className="space-y-4">
@@ -199,11 +266,20 @@ function App() {
                         <input className={`w-full p-4 rounded-2xl border outline-none font-bold ${isDarkMode ? 'bg-black/30 text-white' : 'bg-slate-50'}`} placeholder="Javob" value={newQuestionAnswer} onChange={e => setNewQuestionAnswer(e.target.value)} />
                         <button onClick={addQuestion} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black active:scale-95">QO'SHISH</button>
                       </div>
+
+                      <div className="mt-8 pt-6 border-t border-white/10">
+                        <h2 className="text-[10px] font-black text-orange-500 uppercase mb-3">Excel orqali ommaviy yuklash</h2>
+                        <label className={`block w-full p-4 rounded-2xl border-2 border-dashed cursor-pointer text-center transition-all ${isDarkMode ? 'border-white/10 hover:border-orange-500/50 hover:bg-orange-500/5' : 'border-slate-300 hover:border-orange-500 hover:bg-orange-50'}`}>
+                          <span className="text-xs opacity-60 font-bold italic">Faylni tanlang (.xlsx)</span>
+                          <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleExcelUpload} />
+                        </label>
+                      </div>
                     </div>
                   </div>
-                  <div className={`lg:col-span-3 rounded-[2rem] border overflow-hidden flex flex-col h-[700px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-xl'}`}>
+
+                  <div className={`lg:col-span-3 rounded-[2rem] border overflow-hidden flex flex-col h-[750px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-xl'}`}>
                     <div className="p-6 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                      <h2 className="font-black text-slate-500 uppercase text-xs">Admin Panel</h2>
+                      <h2 className="font-black text-slate-500 uppercase text-xs tracking-widest">Admin Boshqaruv Paneli</h2>
                       <div className="flex gap-2">
                         <button onClick={exportToExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black shadow-md">EXCEL</button>
                         <button onClick={clearAllResults} className="bg-red-600 text-white px-4 py-2 rounded-xl text-[10px] font-black shadow-md">TOZALASH</button>
@@ -227,7 +303,7 @@ function App() {
                         <h3 className="text-xs font-black text-emerald-500 mb-4 uppercase tracking-widest italic">O'quvchilar Reytingi</h3>
                         <div className="space-y-2">
                           {results.map((r, i) => (
-                            <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${isDarkMode ? 'bg-white/5' : 'bg-slate-50 border'}`}>
+                            <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${isDarkMode ? 'bg-white/5 border border-white/5' : 'bg-slate-50 border'}`}>
                               <div><div className="font-black text-sm">{r.name}</div><div className="text-[10px] opacity-40 font-bold">{r.class} | {r.date}</div></div>
                               <div className="font-black text-emerald-500 text-2xl">{r.score}</div>
                             </div>
@@ -241,7 +317,6 @@ function App() {
             </div>
           } />
 
-          {/* Noto'g'ri link kiritilsa asosiyga qaytaradi */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </div>
