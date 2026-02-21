@@ -83,7 +83,6 @@ function App() {
     if (window.confirm("O'chirishni xohlaysizmi?")) remove(ref(db, `questions/${cls}/${id}`));
   };
 
-  // --- KIRISH TUGMASI UCHUN ASOSIY FUNKSIYA ---
   const handleCheckPassword = () => {
     if (adminPassword === "matematika") {
       setIsAuthorized(true);
@@ -131,7 +130,6 @@ function App() {
   return (
     <div className={`min-h-screen p-4 transition-colors duration-500 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'}`}>
 
-      {/* Rejim tugmalari */}
       <div className="fixed top-4 left-4 flex gap-2 z-50">
         <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg active:scale-90 transition-transform">
           {isDarkMode ? '☀️' : '🌙'}
@@ -144,7 +142,6 @@ function App() {
       </button>
 
       {!isAdmin ? (
-        /* --- O'QUVCHI QISMI --- */
         <div className="max-w-xl mx-auto mt-20">
           {!isExamStarted ? (
             <div className={`p-8 rounded-[2.5rem] border shadow-2xl space-y-6 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
@@ -178,12 +175,10 @@ function App() {
           )}
         </div>
       ) : (
-        /* --- ADMIN PANEL --- */
         <div className="max-w-6xl mx-auto mt-20 space-y-8">
           {!isAuthorized ? (
-            /* KIRISH OYNASI */
             <div className={`max-w-md mx-auto p-10 rounded-[2.5rem] border shadow-2xl text-center space-y-6 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
-              <h2 className="text-2xl font-bold uppercase tracking-tighter">O'qituvchi Nazorati</h2>
+              <h2 className="text-2xl font-bold uppercase tracking-tighter">O'QITUVCHI NAZORATI</h2>
               <input
                 type="password"
                 autoFocus
@@ -201,7 +196,6 @@ function App() {
               </button>
             </div>
           ) : (
-            /* BOSHQARUV PANELI */
             <div className="grid lg:grid-cols-5 gap-8">
               <div className="lg:col-span-2 space-y-8">
                 <div className={`p-6 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
@@ -227,7 +221,7 @@ function App() {
 
               <div className={`lg:col-span-3 rounded-[2rem] border overflow-hidden flex flex-col h-[700px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-xl'}`}>
                 <div className="p-6 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                  <h2 className="font-black text-slate-500 uppercase text-xs tracking-widest italic">Natijalar</h2>
+                  <h2 className="font-black text-slate-500 uppercase text-xs tracking-widest italic">Natijalar Jadvali</h2>
                   <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl text-xs font-black transition-all shadow-lg active:scale-95">
                     📥 EXCEL
                   </button>
@@ -248,7 +242,7 @@ function App() {
                   </div>
 
                   <div className="pt-6 border-t border-white/10">
-                    <h3 className="text-xs font-black text-emerald-500 mb-4 uppercase tracking-widest">Reyting</h3>
+                    <h3 className="text-xs font-black text-emerald-500 mb-4 uppercase tracking-widest">O'quvchilar Reytingi</h3>
                     <div className="space-y-2">
                       {results.map((r, i) => (
                         <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${isDarkMode ? 'bg-white/5 border border-white/5' : 'bg-slate-50 border border-slate-200'}`}>
