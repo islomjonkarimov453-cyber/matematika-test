@@ -88,7 +88,7 @@ function App() {
   };
 
   const checkPassword = () => {
-    if (adminPassword === "matematika") { setIsAuthorized(true); setAdminPassword(''); }
+    if (Oqituvchi === "matematika") { setIsAuthorized(true); setAdminPassword(''); }
     else alert("Parol noto'g'ri!");
   };
 
