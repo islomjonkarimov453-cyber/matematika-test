@@ -48,9 +48,13 @@ function App() {
     });
 
     onValue(sRef, (snapshot) => {
-      if (snapshot.exists()) setAdminTimeSetting(snapshot.val());
+      if (snapshot.exists()) {
+        const timeVal = snapshot.val();
+        setAdminTimeSetting(timeVal);
+        if (!isExamStarted) setTimeLeft(timeVal);
+      }
     });
-  }, []);
+  }, [isExamStarted]);
 
   // Taymer mantiqi
   useEffect(() => {
@@ -73,7 +77,7 @@ function App() {
     };
 
     const handleContextMenu = (e) => {
-      if (isExamStarted) e.preventDefault(); // Nusxalashni taqiqlash
+      if (isExamStarted) e.preventDefault();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -102,11 +106,8 @@ function App() {
         let count = 0;
         data.forEach((row) => {
           if (!row || row.length < 2) return;
-
           const rawQ = row[0] ? row[0].toString().trim() : "";
           const rawA = row[1] ? row[1].toString().trim() : "";
-
-          // Sarlavhalarni filtr qilish
           const skipWords = ["savol", "javob", "question", "answer", "№", "n", "t/r"];
           if (skipWords.includes(rawQ.toLowerCase()) || skipWords.includes(rawA.toLowerCase())) return;
 
@@ -157,35 +158,55 @@ function App() {
     }).then(() => { setNewQuestionText(''); setNewQuestionAnswer(''); });
   };
 
-  // Test mantiqi
+  // --- TEST MANTIQI (TUZATILGAN) ---
   const startExam = () => {
-    const questions = Object.values(questionsFromDB[selectedClass] || {});
-    if (!studentName.trim() || questions.length === 0) return alert("Xatolik: Ism yo'q yoki bu sinf uchun savollar topilmadi!");
-    setExamQuestions([...questions].sort(() => 0.5 - Math.random()));
-    setIsExamStarted(true);
-    setCurrentIndex(0); setCorrectCount(0); setStatus(null);
+    const classData = questionsFromDB[selectedClass];
+    if (!studentName.trim()) return alert("Iltimos, ismingizni kiriting!");
+    if (!classData || Object.keys(classData).length === 0) return alert("Bu sinf uchun savollar topilmadi!");
+
+    const questionsArray = Object.values(classData);
+    setExamQuestions([...questionsArray].sort(() => 0.5 - Math.random()));
+
+    // Holatlarni reset qilish
+    setCurrentIndex(0);
+    setCorrectCount(0);
+    setStudentInput('');
+    setStatus(null);
     setTimeLeft(adminTimeSetting);
+    setIsExamStarted(true);
   };
 
   const handleFinish = () => {
-    setExamQuestions(prev => {
-      const percent = Math.round((correctCount / (prev.length || 1)) * 100) + '%';
+    // CorrectCount holati darhol yangilanmasligi mumkinligini hisobga olib, 
+    // natijani xavfsiz hisoblash
+    setExamQuestions(prevQuestions => {
+      const finalScore = Math.round((correctCount / (prevQuestions.length || 1)) * 100) + '%';
       push(ref(db, 'results'), {
-        name: studentName, score: percent, class: selectedClass, date: new Date().toLocaleString()
+        name: studentName,
+        score: finalScore,
+        class: selectedClass,
+        date: new Date().toLocaleString()
       });
-      setStatus(percent);
-      return prev;
+      setStatus(finalScore);
+      return prevQuestions;
     });
   };
 
   const handleNext = () => {
     if (!studentInput.trim()) return alert("Javob yozing!");
-    if (studentInput.trim().toLowerCase() === examQuestions[currentIndex].answer.toLowerCase()) {
+
+    const currentQ = examQuestions[currentIndex];
+    // Javobni solishtirishda toString() va trim() ishlatamiz (Exceldagi raqamlar uchun)
+    if (studentInput.trim().toLowerCase() === currentQ.answer.toString().toLowerCase().trim()) {
       setCorrectCount(prev => prev + 1);
     }
+
     if (currentIndex + 1 < examQuestions.length) {
-      setCurrentIndex(currentIndex + 1); setStudentInput('');
-    } else handleFinish();
+      setCurrentIndex(prev => prev + 1);
+      setStudentInput('');
+    } else {
+      handleFinish();
+    }
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center font-bold">Yuklanmoqda...</div>;
@@ -193,8 +214,6 @@ function App() {
   return (
     <Router>
       <div className={`min-h-screen p-4 transition-colors duration-500 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'}`}>
-
-        {/* Universal Dark Mode Tugmasi */}
         <div className="fixed top-4 left-4 z-50">
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg active:scale-90 transition-transform">
             {isDarkMode ? '☀️' : '🌙'}
@@ -246,7 +265,7 @@ function App() {
                   <button onClick={handleCheckPassword} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold active:scale-95 transition-all shadow-lg">KIRISH</button>
                 </div>
               ) : (
-                <div className="grid lg:grid-cols-5 gap-8 animate-in fade-in duration-500">
+                <div className="grid lg:grid-cols-5 gap-8">
                   <div className="lg:col-span-2 space-y-8">
                     <div className={`p-6 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
                       <h2 className="text-xs font-black text-blue-500 uppercase mb-4">Vaqt (soniya)</h2>
@@ -316,7 +335,6 @@ function App() {
               )}
             </div>
           } />
-
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </div>
