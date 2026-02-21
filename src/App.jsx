@@ -27,7 +27,7 @@ function App() {
   const [targetClass, setTargetClass] = useState('7A');
   const [results, setResults] = useState([]);
 
-  // Firebase yuklash
+  // --- 1. FIREBASE MA'LUMOTLARINI YUKLASH ---
   useEffect(() => {
     onValue(ref(db, 'questions'), (snapshot) => {
       if (snapshot.exists()) setQuestionsFromDB(snapshot.val());
@@ -42,7 +42,7 @@ function App() {
     });
   }, []);
 
-  // Taymer
+  // --- 2. TAYMER MANTIQI ---
   useEffect(() => {
     let timer;
     if (isExamStarted && !status && timeLeft > 0) {
@@ -53,6 +53,19 @@ function App() {
     return () => clearInterval(timer);
   }, [isExamStarted, timeLeft, status]);
 
+  // --- 3. ANTI-CHEAT (SAHIFADAN CHIQISHNI TAQIQLASH) ---
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (isExamStarted && !status && document.hidden) {
+        alert("DIQQAT: Sahifadan chiqish taqiqlangan! Testingiz yakunlandi.");
+        handleFinish();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isExamStarted, status]);
+
+  // --- 4. EXCEL FUNKSIYALARI (YUKLASH VA EKSPORT) ---
   const handleExcelUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -76,6 +89,15 @@ function App() {
     reader.readAsBinaryString(file);
   };
 
+  const exportToExcel = () => {
+    if (results.length === 0) return alert("Natijalar yo'q!");
+    const ws = XLSX.utils.json_to_sheet(results);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Natijalar");
+    XLSX.writeFile(wb, "Test_Natijalari.xlsx");
+  };
+
+  // --- 5. TEST JARAYONI MANTIQI ---
   const handleCheckPassword = () => {
     if (adminPassword === "matematika") { setIsAuthorized(true); setAdminPassword(''); }
     else alert("Parol xato!");
@@ -83,7 +105,7 @@ function App() {
 
   const startExam = () => {
     const questions = Object.values(questionsFromDB[selectedClass] || {});
-    if (!studentName.trim() || questions.length === 0) return alert("Ism kiriting yoki savollar mavjud emas!");
+    if (!studentName.trim() || questions.length === 0) return alert("Ism kiriting yoki bu sinfda savollar yo'q!");
     setExamQuestions([...questions].sort(() => 0.5 - Math.random()));
     setIsExamStarted(true);
     setCurrentIndex(0); setCorrectCount(0); setStatus(null); setTimeLeft(adminTimeSetting);
@@ -108,7 +130,6 @@ function App() {
     <Router>
       <div className={`min-h-screen p-4 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'}`}>
 
-        {/* Dark Mode */}
         <button onClick={() => setIsDarkMode(!isDarkMode)} className="fixed top-4 left-4 z-50 p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20">
           {isDarkMode ? '☀️' : '🌙'}
         </button>
@@ -139,7 +160,7 @@ function App() {
                       <button onClick={handleNext} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-lg active:scale-95 transition-transform">KEYINGI</button>
                     </div>
                   ) : (
-                    <div className="py-12 space-y-6 animate-bounce">
+                    <div className="py-12 space-y-6">
                       <h3 className="text-8xl font-black text-green-500">{status}</h3>
                       <button onClick={() => window.location.reload()} className="px-10 py-4 bg-blue-600 text-white rounded-full font-bold">YANA BOSHLASH</button>
                     </div>
@@ -155,18 +176,21 @@ function App() {
               <h1 className="text-2xl font-black text-emerald-500 italic">USTOZLAR PANELI</h1>
               <div className="grid lg:grid-cols-2 gap-8">
                 <div className={`p-8 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-lg'}`}>
-                  <h2 className="text-sm font-black mb-4 opacity-50 uppercase">Savol Qo'shish</h2>
+                  <h2 className="text-sm font-black mb-4 opacity-50 uppercase tracking-widest text-blue-500">Savol Qo'shish</h2>
                   <div className="space-y-4">
                     <select className={`w-full p-3 rounded-xl border outline-none ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-white'}`} value={targetClass} onChange={e => setTargetClass(e.target.value)}>
                       {['6A', '7A', '7B', '8A', '8B', '9A', '9B', '10A', '10B', '11A', '11B'].map(c => <option key={c} value={c}>{c}-sinf</option>)}
                     </select>
                     <textarea className={`w-full p-4 rounded-2xl border outline-none h-24 ${isDarkMode ? 'bg-black/30' : 'bg-slate-50'}`} placeholder="Savol matni..." value={newQuestionText} onChange={e => setNewQuestionText(e.target.value)} />
                     <input className={`w-full p-4 rounded-2xl border outline-none font-bold ${isDarkMode ? 'bg-black/30' : 'bg-slate-50'}`} placeholder="Javob" value={newQuestionAnswer} onChange={e => setNewQuestionAnswer(e.target.value)} />
-                    <button onClick={() => { push(ref(db, `questions/${targetClass}`), { text: newQuestionText, answer: newQuestionAnswer.trim(), id: Date.now() }); setNewQuestionText(''); setNewQuestionAnswer(''); }} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black active:scale-95">SAQLASH</button>
+                    <button onClick={() => { push(ref(db, `questions/${targetClass}`), { text: newQuestionText, answer: newQuestionAnswer.trim(), id: Date.now() }); setNewQuestionText(''); setNewQuestionAnswer(''); }} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black active:scale-95 shadow-lg transition-all">SAQLASH</button>
                   </div>
                 </div>
-                <div className={`p-8 rounded-[2rem] border overflow-y-auto h-[500px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
-                  <h2 className="text-sm font-black mb-4 opacity-50 uppercase tracking-widest text-orange-500">O'quvchilar Reytingi</h2>
+                <div className={`p-8 rounded-[2rem] border overflow-y-auto h-[600px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200'}`}>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-sm font-black opacity-50 uppercase tracking-widest text-orange-500">Reyting</h2>
+                    <button onClick={exportToExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black italic">EXCEL YUKLASH</button>
+                  </div>
                   <div className="space-y-2">
                     {results.map((r, i) => (
                       <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${isDarkMode ? 'bg-white/5 border border-white/5' : 'bg-slate-50 border'}`}>
@@ -192,27 +216,26 @@ function App() {
               ) : (
                 <div className="grid lg:grid-cols-5 gap-8 animate-in fade-in">
                   <div className="lg:col-span-2 space-y-6">
-                    <div className={`p-6 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white'}`}>
+                    <div className={`p-6 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white shadow-lg'}`}>
                       <h2 className="text-xs font-black text-blue-500 uppercase mb-4 tracking-tighter">Test Vaqti (Soniya)</h2>
                       <div className="flex gap-2">
                         <input type="number" className="flex-1 p-3 rounded-xl border outline-none bg-transparent font-bold" value={adminTimeSetting} onChange={e => setAdminTimeSetting(e.target.value)} />
                         <button onClick={() => set(ref(db, 'settings/timer'), parseInt(adminTimeSetting))} className="px-6 bg-blue-600 text-white rounded-xl font-bold">OK</button>
                       </div>
                     </div>
-                    <div className={`p-6 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white'}`}>
+                    <div className={`p-6 rounded-[2rem] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white shadow-lg'}`}>
                       <h2 className="text-xs font-black text-orange-500 uppercase mb-4 tracking-tighter">Excel orqali ommaviy yuklash</h2>
                       <input type="file" className="text-xs block w-full" accept=".xlsx, .xls" onChange={handleExcelUpload} />
                     </div>
+                    <button onClick={() => window.confirm("HAMMA NATIJALARNI O'CHIRISH?") && remove(ref(db, 'results'))} className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs shadow-lg">NATIJALARNI TOZALASH</button>
                   </div>
+
                   <div className={`lg:col-span-3 rounded-[2rem] border flex flex-col h-[700px] ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white shadow-xl'}`}>
                     <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
-                      <h2 className="font-black text-xs opacity-50 uppercase">Barcha savollar va Tozalash</h2>
-                      <div className="flex gap-2">
-                        <button onClick={exportToExcel} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black italic">EXCEL YUKLASH</button>
-                        <button onClick={() => window.confirm("HAMMASINI O'CHIRISH?") && remove(ref(db, 'results'))} className="bg-red-600 text-white px-4 py-2 rounded-xl text-[10px] font-black italic">NATIJALARNI TOZALASH</button>
-                      </div>
+                      <h2 className="font-black text-xs opacity-50 uppercase tracking-widest">Barcha savollar</h2>
+                      <span className="text-[10px] opacity-40">O'chirish uchun ✕ ni bosing</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-hide">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-8">
                       {Object.entries(questionsFromDB).map(([cls, qs]) => (
                         <div key={cls} className="space-y-2">
                           <div className="text-[10px] font-black text-blue-500 bg-blue-500/10 p-1 px-4 rounded-full w-fit">{cls} SINFI</div>
